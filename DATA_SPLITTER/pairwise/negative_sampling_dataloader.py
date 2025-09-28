@@ -1,5 +1,4 @@
 import random
-import itertools
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -13,32 +12,26 @@ class PairwiseNegativeSamplingDataset(Dataset):
     def __init__(
         self, 
         data: pd.DataFrame, 
-        neg_items_per_user: dict,
+        neg_per_user: dict,
         neg_per_pos: int,
         col_user: str=DEFAULT_USER_COL,
         col_item: str=DEFAULT_ITEM_COL,
     ):
-        self.neg_items_per_user = neg_items_per_user
+        self.neg_per_user = neg_per_user
         self.neg_per_pos = neg_per_pos
         self.col_user = col_user
         self.col_item = col_item
 
         zip_obj = zip(data[self.col_user], data[self.col_item])
         self.user_item_pairs = list(zip_obj)
+        self.total_samples = len(self.user_item_pairs) * self.neg_per_pos
 
     def __len__(self):
-        return len(self.user_item_pairs)
+        return self.total_samples
 
     def __getitem__(self, idx):
-        user, pos = self.user_item_pairs[idx]
-
-        # negative sampling
-        kwargs = dict(
-            population=self.neg_items_per_user[user],
-            k=self.neg_per_pos,     
-        )
-        neg = random.sample(**kwargs)[0]
-
+        user, pos = self.user_item_pairs[idx // self.neg_per_pos]
+        neg = random.choice(self.neg_per_user[user])
         return user, pos, neg
 
 
@@ -57,7 +50,7 @@ class PairwiseNegativeSamplingDataLoader:
             col_user=self.col_user, 
             col_item=self.col_item,
         )
-        self.neg_items_per_user = self._generate_negative_sample_pool(**kwargs)
+        self.neg_per_user = self._negative_sample_candidates_generator(**kwargs)
 
     def get(
         self, 
@@ -66,13 +59,9 @@ class PairwiseNegativeSamplingDataLoader:
         batch_size: int,
         shuffle: bool=True,
     ):
-        CONDITION = neg_per_pos == 1
-        ERROR_MESSAGE = "in pairwise data set, neg per pos must be 1:1"
-        assert CONDITION, ERROR_MESSAGE
-
         kwargs = dict(
             data=data, 
-            neg_items_per_user=self.neg_items_per_user,
+            neg_per_user=self.neg_per_user,
             neg_per_pos=neg_per_pos,
             col_user=self.col_user, 
             col_item=self.col_item,     
@@ -89,7 +78,7 @@ class PairwiseNegativeSamplingDataLoader:
 
         return loader
 
-    def _generate_negative_sample_pool(
+    def _negative_sample_candidates_generator(
         self,
         origin: pd.DataFrame, 
         col_user: str=DEFAULT_USER_COL,
@@ -103,12 +92,12 @@ class PairwiseNegativeSamplingDataLoader:
             for user in all_users
         }
 
-        neg_items_per_user = {
+        neg_per_user = {
             user: list(set(all_items) - pos_per_user[user])
             for user in all_users
         }
 
-        return neg_items_per_user
+        return neg_per_user
 
     def _collate(self, batch):
         user_list, pos_list, neg_list = zip(*batch)

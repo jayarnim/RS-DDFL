@@ -1,5 +1,4 @@
 import random
-import itertools
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -13,12 +12,12 @@ class PointwiseNegativeSamplingDataset(Dataset):
     def __init__(
         self, 
         data: pd.DataFrame, 
-        neg_items_per_user: dict,
+        neg_per_user: dict,
         neg_per_pos: int,
         col_user: str=DEFAULT_USER_COL,
         col_item: str=DEFAULT_ITEM_COL,
     ):
-        self.neg_items_per_user = neg_items_per_user
+        self.neg_per_user = neg_per_user
         self.neg_per_pos = neg_per_pos
         self.col_user = col_user
         self.col_item = col_item
@@ -38,7 +37,7 @@ class PointwiseNegativeSamplingDataset(Dataset):
             return user, pos, 1
         else:
             user, _ = self.user_item_pairs[idx // (1 + self.neg_per_pos)]
-            neg = random.choice(self.neg_items_per_user[user])
+            neg = random.choice(self.neg_per_user[user])
             return user, neg, 0
 
 
@@ -57,7 +56,7 @@ class PointwiseNegativeSamplingDataLoader:
             col_user=self.col_user, 
             col_item=self.col_item,
         )
-        self.neg_items_per_user = self._generate_negative_sample_pool(**kwargs)
+        self.neg_per_user = self._negative_sample_candidates_generator(**kwargs)
 
     def get(
         self, 
@@ -68,7 +67,7 @@ class PointwiseNegativeSamplingDataLoader:
     ):
         kwargs = dict(
             data=data, 
-            neg_items_per_user=self.neg_items_per_user,
+            neg_per_user=self.neg_per_user,
             neg_per_pos=neg_per_pos,
             col_user=self.col_user, 
             col_item=self.col_item,     
@@ -85,7 +84,7 @@ class PointwiseNegativeSamplingDataLoader:
 
         return loader
 
-    def _generate_negative_sample_pool(
+    def _negative_sample_candidates_generator(
         self,
         origin: pd.DataFrame, 
         col_user: str=DEFAULT_USER_COL,
@@ -99,12 +98,12 @@ class PointwiseNegativeSamplingDataLoader:
             for user in all_users
         }
 
-        neg_items_per_user = {
+        neg_per_user = {
             user: list(set(all_items) - pos_per_user[user])
             for user in all_users
         }
 
-        return neg_items_per_user
+        return neg_per_user
 
     def _collate(self, batch):
         user_list, item_list, label_list = zip(*batch)
