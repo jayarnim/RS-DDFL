@@ -15,4 +15,3 @@ from UTILS.constants import(
 from typing import Literal
 
 LOADING_TYPE = Literal["general", "curriculum", "userpair", "phase"]
-FILTER_BY = Literal["user", "item"]

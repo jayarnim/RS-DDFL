@@ -8,7 +8,6 @@ from ..utils.constants import (
     DEFAULT_USER_COL,
     DEFAULT_ITEM_COL,
     LOADING_TYPE,
-    FILTER_BY,
 )
 from ..utils.python_splitters import python_stratified_split
 from .negative_sampling_dataloader import PointwiseNegativeSamplingDataLoader
@@ -53,9 +52,8 @@ class DataSplitter:
 
     def get(
         self, 
-        filter_by: FILTER_BY="user",
         trn_val_tst_ratio: list=[0.8, 0.1, 0.1],
-        neg_per_pos: list=[1, 1, 99, 99],
+        neg_per_pos: list=[4, 4, 99, 99],
         batch_size: list=[256, 256, 256, 1000],
         max_hist: Optional[int]=None,
         shuffle: bool=True,
@@ -63,7 +61,6 @@ class DataSplitter:
     ):
         # split original data
         kwargs = dict(
-            filter_by=filter_by,
             trn_val_tst_ratio=trn_val_tst_ratio,
             seed=seed,
         )
@@ -178,14 +175,14 @@ class DataSplitter:
 
     def _tfidf(
         self, 
-        user_item_binary_matrix: np.ndarray,
+        interactions: torch.Tensor,
     ):
         # drop padding idx
-        user_item_binary_matrix_unpadded = user_item_binary_matrix[:-1, :-1]
+        interactions_unpadded = interactions[:-1, :-1]
 
         # compute tfidf
         tfidf = TfidfTransformer(norm=None)
-        tfidf_matrix = tfidf.fit_transform(user_item_binary_matrix_unpadded)
+        tfidf_matrix = tfidf.fit_transform(interactions_unpadded)
 
         # sparse matrix -> dict: {(u_idx, i_idx): tf-idf score}
         tfidf_dict = {}
@@ -197,7 +194,6 @@ class DataSplitter:
 
     def _data_splitter(
         self,
-        filter_by: FILTER_BY,
         trn_val_tst_ratio: list,
         seed: int,
     ):
@@ -222,7 +218,6 @@ class DataSplitter:
         # trn_val_tst -> [trn, val, tst]
         kwargs = dict(
             data=trn_val_tst,
-            filter_by=filter_by,
             ratio=trn_val_tst_ratio,
             col_user=self.col_user,
             col_item=self.col_item,
