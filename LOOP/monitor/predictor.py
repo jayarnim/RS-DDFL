@@ -43,7 +43,7 @@ class EarlyStoppingPredictor:
 
         iter_obj = tqdm(
             iterable=dataloader, 
-            desc=f"EVALUATION",
+            desc=f"LEAVE ONE OUT",
         )
 
         for user_idx, item_idx, label in iter_obj:

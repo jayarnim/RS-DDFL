@@ -1,10 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
-
-import pandas as pd
 import numpy as np
 import math
-from .constants import (
+from ..utils.constants import (
     DEFAULT_ITEM_COL, 
     DEFAULT_USER_COL,
 )

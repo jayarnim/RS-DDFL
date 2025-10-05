@@ -14,4 +14,5 @@ from UTILS.constants import(
 # Customized
 from typing import Literal
 
-LOADING_TYPE = Literal["general", "curriculum", "userpair", "phase"]
+LEARNING_TYPE = Literal["pointwise", "pairwise", "listwise"]
+HIST_SELECTOR_TYPE = Literal["default", "tfidf"]

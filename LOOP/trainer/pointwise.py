@@ -1,34 +1,30 @@
 from tqdm import tqdm
 from time import perf_counter
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
+from ..utils.constants import LOSS_FN_POINTWISE
+from ..loss_fn import pointwise
 
 
 class PointwiseTrainer:
     def __init__(
         self,
-        model,
-        task_fn,
+        model: nn.Module,
+        task_fn_type: LOSS_FN_POINTWISE="bce",
         lr: float=1e-4, 
         lambda_: float=1e-3, 
     ):
         DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(DEVICE)
 
-        self.model = model
-        self.task_fn = task_fn
-        
-        # optimizer
-        kwargs = dict(
-            params=self.model.parameters(), 
-            lr=lr, 
-            weight_decay=lambda_,
-        )
-        self.optimizer = optim.Adam(**kwargs)
+        self.model = model.to(self.device)
+        self.task_fn_type = task_fn_type
+        self.lr = lr
+        self.lambda_ = lambda_
 
-        # gradient scaler setting
-        self.scaler = GradScaler()
+        self._set_up_components()
 
     def fit(
         self, 
@@ -42,7 +38,7 @@ class PointwiseTrainer:
             epoch=epoch,
             n_epochs=n_epochs,
         )
-        trn_task_loss, batch_computing_cost_list = self._epoch_trn_step(**kwargs)
+        trn_task_loss, computing_cost = self._epoch_trn_step(**kwargs)
 
         kwargs = dict(
             dataloader=val_loader,
@@ -51,7 +47,7 @@ class PointwiseTrainer:
         )
         val_task_loss = self._epoch_val_step(**kwargs)
 
-        return trn_task_loss, val_task_loss, batch_computing_cost_list
+        return trn_task_loss, val_task_loss, computing_cost
 
     def _epoch_trn_step(
         self,
@@ -62,7 +58,7 @@ class PointwiseTrainer:
         self.model.train()
 
         epoch_task_loss = 0.0
-        batch_computing_cost_list = []
+        epoch_computing_cost = []
 
         iter_obj = tqdm(
             iterable=dataloader, 
@@ -92,9 +88,9 @@ class PointwiseTrainer:
 
             # accumulate loss
             epoch_task_loss += batch_task_loss.item()
-            batch_computing_cost_list.append(batch_computing_cost)
+            epoch_computing_cost.append(batch_computing_cost)
 
-        return epoch_task_loss / len(dataloader), batch_computing_cost_list
+        return epoch_task_loss / len(dataloader), epoch_computing_cost
 
     def _epoch_val_step(
             self,
@@ -139,3 +135,28 @@ class PointwiseTrainer:
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
+
+    def _set_up_components(self):
+        self._init_task_fn()
+        self._init_optimizer()
+        self._init_scaler()
+
+    def _init_task_fn(self):
+        if self.task_fn_type=="bce":
+            self.task_fn = pointwise.bce
+        else:
+            raise ValueError(f"Invalid task_fn_type: {self.task_fn_type}")
+
+    def _init_optimizer(self):
+        kwargs = dict(
+            params=self.model.parameters(), 
+            lr=self.lr, 
+            weight_decay=self.lambda_,
+        )
+        self.optimizer = optim.Adam(**kwargs)
+
+    def _init_scaler(self):
+        kwargs = dict(
+            device=self.device,
+        )
+        self.scaler = GradScaler(**kwargs)

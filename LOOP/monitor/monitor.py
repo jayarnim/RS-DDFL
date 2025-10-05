@@ -1,5 +1,6 @@
 import copy
 import torch
+import torch.nn as nn
 import pandas as pd
 from ..utils.constants import (
     DEFAULT_USER_COL,
@@ -23,8 +24,8 @@ from .predictor import EarlyStoppingPredictor
 class EarlyStoppingMonitor:
     def __init__(
         self,
-        model,
-        metric_fn: METRIC_FN,
+        model: nn.Module,
+        metric_fn_type: METRIC_FN,
         patience: int,
         min_delta: float,
         col_user: str=DEFAULT_USER_COL,
@@ -37,6 +38,7 @@ class EarlyStoppingMonitor:
         self.device = torch.device(DEVICE)
 
         self.model = model.to(self.device)
+        self.metric_fn_type = metric_fn_type
         self.patience = patience
         self.min_delta = min_delta
         self.col_user = col_user
@@ -45,33 +47,7 @@ class EarlyStoppingMonitor:
         self.col_prediction = col_prediction
         self.top_k = top_k
 
-        if metric_fn=="hr":
-            self.metric_fn = hit_ratio_at_k
-        elif metric_fn=="precision":
-            self.metric_fn = precision_at_k
-        elif metric_fn=="recall":
-            self.metric_fn = recall_at_k
-        elif metric_fn=="map":
-            self.metric_fn = map_at_k
-        elif metric_fn=="ndcg":
-            self.metric_fn = ndcg_at_k
-        else:
-            ValueError(f"Invalid metric function: {metric_fn}")
-
-        kwargs = dict(
-            model=self.model,
-            col_user=self.col_user,
-            col_item=self.col_item,
-            col_label=self.col_label,
-            col_prediction=self.col_prediction,
-        )
-        self.predictor = EarlyStoppingPredictor(**kwargs)
-        
-        kwargs = dict(
-            patience=self.patience,
-            min_delta=self.min_delta,
-        )
-        self.stopper = EarlyStopper(**kwargs)
+        self._set_up_components()
 
     def monitor(
         self,
@@ -80,7 +56,7 @@ class EarlyStoppingMonitor:
     ):
         result = self.predictor.predict(dataloader)
 
-        rating_true, rating_pred = self._sep_true_pred(result)
+        rating_true, rating_pred = self._true_pred_seperator(result)
 
         kwargs = dict(
             rating_true=rating_true,
@@ -91,18 +67,36 @@ class EarlyStoppingMonitor:
             col_prediction=self.col_prediction,
             k=self.top_k,
         )
-        score = self.metric_fn(**kwargs)
+        self._current_score = self.metric_fn(**kwargs)
 
         kwargs = dict(
-            current_score=score, 
+            current_score=self._current_score, 
             current_epoch=epoch,
             current_model_state=copy.deepcopy(self.model.state_dict()),
         )
         self.stopper.check(**kwargs)
 
-        return score
+    @property
+    def get_current_score(self):
+        return self._current_score
 
-    def _sep_true_pred(
+    @property
+    def get_should_stop(self):
+        return self.stopper.get_should_stop
+
+    @property
+    def get_best_epoch(self):
+        return self.stopper.get_best_epoch
+
+    @property
+    def get_best_score(self):
+        return self.stopper.get_best_score
+
+    @property
+    def get_best_model_state(self):
+        return self.stopper.get_best_model_state
+
+    def _true_pred_seperator(
         self,
         result: pd.DataFrame,
     ):
@@ -123,3 +117,40 @@ class EarlyStoppingMonitor:
         )
 
         return rating_true, rating_pred
+
+    def _set_up_components(self):
+        self._current_score = None
+        self._init_metric_fn()
+        self._init_predictor()
+        self._init_stopper()
+
+    def _init_metric_fn(self):
+        if self.metric_fn_type=="hr":
+            self.metric_fn = hit_ratio_at_k
+        elif self.metric_fn_type=="precision":
+            self.metric_fn = precision_at_k
+        elif self.metric_fn_type=="recall":
+            self.metric_fn_type = recall_at_k
+        elif self.metric_fn_type=="map":
+            self.metric_fn = map_at_k
+        elif self.metric_fn_type=="ndcg":
+            self.metric_fn = ndcg_at_k
+        else:
+            raise ValueError(f"Invalid metric function: {self.metric_fn_type}")
+
+    def _init_predictor(self):
+        kwargs = dict(
+            model=self.model,
+            col_user=self.col_user,
+            col_item=self.col_item,
+            col_label=self.col_label,
+            col_prediction=self.col_prediction,
+        )
+        self.predictor = EarlyStoppingPredictor(**kwargs)
+
+    def _init_stopper(self):        
+        kwargs = dict(
+            patience=self.patience,
+            min_delta=self.min_delta,
+        )
+        self.stopper = EarlyStopper(**kwargs)

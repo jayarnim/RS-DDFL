@@ -1,7 +1,7 @@
 from . import (
     checkpointer,
     constants,
-    data_handler,
+    datahandler,
     seed,
     visualizer,
 )

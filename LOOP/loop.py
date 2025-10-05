@@ -43,11 +43,11 @@ class TrainingLoop:
                 epoch=epoch,
                 n_epochs=n_epochs,
             )
-            trn_task_loss, val_task_loss, computing_cost_list_per_batch = self.trainer.fit(**kwargs)
+            trn_task_loss, val_task_loss, computing_cost = self.trainer.fit(**kwargs)
 
             trn_task_loss_list.append(trn_task_loss)
             val_task_loss_list.append(val_task_loss)
-            computing_cost_list.extend(computing_cost_list_per_batch)
+            computing_cost_list.extend(computing_cost)
 
             print(
                 f"TRN TASK LOSS: {trn_task_loss:.4f}",
@@ -61,15 +61,15 @@ class TrainingLoop:
                     dataloader=loo_loader, 
                     epoch=epoch,
                 )
-                current_score = self.monitor.monitor(**kwargs)
+                self.monitor.monitor(**kwargs)
 
-                if self.monitor.stopper.should_stop:
+                if self.monitor.get_should_stop:
                     break
                 else:
                     print(
-                        f"CURRENT SCORE: {current_score:.4f}",
-                        f"BEST SCORE: {self.monitor.stopper.best_score:.4f}",
-                        f"BEST EPOCH: {self.monitor.stopper.best_epoch}",
+                        f"CURRENT SCORE: {self.monitor.get_current_score:.4f}",
+                        f"BEST SCORE: {self.monitor.get_best_score:.4f}",
+                        f"BEST EPOCH: {self.monitor.get_best_epoch}",
                         sep='\t',
                     )
 
@@ -82,9 +82,9 @@ class TrainingLoop:
             val=val_task_loss_list,
         )
 
-        best_epoch = self.monitor.stopper.best_epoch
-        best_score = self.monitor.stopper.best_score
-        best_model_state = self.monitor.stopper.best_model_state
+        best_epoch = self.monitor.get_best_epoch
+        best_score = self.monitor.get_best_score
+        best_model_state = self.monitor.get_best_model_state
 
         if best_model_state is not None:
             self.model.load_state_dict(best_model_state)
