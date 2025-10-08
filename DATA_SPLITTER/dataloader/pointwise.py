@@ -23,7 +23,7 @@ class CustomizedDataset(Dataset):
         self.col_user = col_user
         self.col_item = col_item
 
-        self._setup_components()
+        self._set_up_components()
 
     def __len__(self):
         return self.total_samples
@@ -39,7 +39,7 @@ class CustomizedDataset(Dataset):
             neg = random.choice(self.neg_per_user[user])
             return user, neg, 0
 
-    def _setup_components(self):
+    def _set_up_components(self):
         self.user_list = sorted(self.origin[self.col_user].unique())
         self.item_list = sorted(self.origin[self.col_item].unique())
 

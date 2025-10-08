@@ -13,7 +13,7 @@ from UTILS.constants import(
 
 from typing import Literal
 
-LOSS_FN_POINTWISE = Literal["bce"]
-LOSS_FN_PAIRWISE = Literal["bpr"]
-LOSS_FN_LISTWISE = Literal["climf"]
-METRIC_FN = Literal["hr", "precision", "recall", "map", "ndcg"]
+LOSS_FN_TYPE_POINTWISE = Literal["bce"]
+LOSS_FN_TYPE_PAIRWISE = Literal["bpr"]
+LOSS_FN_TYPE_LISTWISE = Literal["climf"]
+METRIC_FN_TYPE = Literal["hr", "precision", "recall", "map", "ndcg"]

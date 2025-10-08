@@ -8,7 +8,7 @@ from ..utils.constants import (
     DEFAULT_LABEL_COL,
     DEFAULT_PREDICTION_COL,
     DEFAULT_K,
-    METRIC_FN,
+    METRIC_FN_TYPE,
 )
 from ..msr.python_evaluation import (
     hit_ratio_at_k,
@@ -25,7 +25,7 @@ class EarlyStoppingMonitor:
     def __init__(
         self,
         model: nn.Module,
-        metric_fn_type: METRIC_FN,
+        metric_fn_type: METRIC_FN_TYPE,
         patience: int,
         min_delta: float,
         col_user: str=DEFAULT_USER_COL,

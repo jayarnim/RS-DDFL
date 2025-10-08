@@ -17,17 +17,17 @@ from . import hist_selector
 class TRN_VAL_TST:
     def __init__(
         self, 
-        learning_type: LEARNING_TYPE,
         n_users: int, 
         n_items: int,
         col_user: str=DEFAULT_USER_COL, 
         col_item: str=DEFAULT_ITEM_COL,
+        learning_type: LEARNING_TYPE="pointwise",
     ):
-        self.learning_type = learning_type
         self.n_users = n_users
         self.n_items = n_items
         self.col_user = col_user
         self.col_item = col_item
+        self.learning_type = learning_type
 
         self._set_up_components()
 
@@ -35,7 +35,7 @@ class TRN_VAL_TST:
         self, 
         origin: pd.DataFrame,
         trn_val_tst_ratio: dict=dict(trn=0.8, val=0.1, tst=0.1),
-        neg_per_pos_ratio: dict=dict(trn=1, val=1, tst=99, loo=99),
+        neg_per_pos_ratio: dict=dict(trn=4, val=4, tst=99, loo=99),
         batch_size: dict=dict(trn=256, val=256, tst=256, loo=1000),
         hist_selector_type: HIST_SELECTOR_TYPE="default",
         max_hist: Optional[int]=None,
@@ -77,9 +77,7 @@ class TRN_VAL_TST:
                 loader = self.dataloader_eval.get(**kwargs)
             elif split_type=="loo":
                 loader = self.dataloader_eval.get(**kwargs)
-            else:
-                raise ValueError(f"split type is wrong: {split_type}")
-            
+
             loaders.append(loader)
 
         # generate user-item interaction matrix
@@ -221,11 +219,11 @@ class TRN_VAL_TST:
         assert CONDITION, ERROR_MESSAGE
 
         CONDITION = (list(neg_per_pos_ratio.keys()) == ["trn", "val", "tst", "loo"])
-        ERROR_MESSAGE = f"key of neg_per_pos_ratio must be ['trn', 'val', 'tst', 'loo], but: {list(neg_per_pos_ratio.keys())}"
+        ERROR_MESSAGE = f"key of neg_per_pos_ratio must be ['trn', 'val', 'tst', 'loo'], but: {list(neg_per_pos_ratio.keys())}"
         assert CONDITION, ERROR_MESSAGE
 
         CONDITION = (list(batch_size.keys()) == ["trn", "val", "tst", "loo"])
-        ERROR_MESSAGE = f"key of batch_size must be ['trn', 'val', 'tst', 'loo], but: {list(batch_size.keys())}"
+        ERROR_MESSAGE = f"key of batch_size must be ['trn', 'val', 'tst', 'loo'], but: {list(batch_size.keys())}"
         assert CONDITION, ERROR_MESSAGE
 
     def _set_up_components(self):

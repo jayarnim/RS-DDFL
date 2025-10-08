@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
-from ..utils.constants import LOSS_FN_PAIRWISE
+from ..utils.constants import LOSS_FN_TYPE_PAIRWISE
 from ..loss_fn import pairwise
 
 
@@ -12,7 +12,7 @@ class PairwiseTrainer:
     def __init__(
         self,
         model: nn.Module,
-        task_fn_type: LOSS_FN_PAIRWISE="bpr",
+        task_fn_type: LOSS_FN_TYPE_PAIRWISE="bpr",
         lr: float=1e-4, 
         lambda_: float=1e-3, 
     ):

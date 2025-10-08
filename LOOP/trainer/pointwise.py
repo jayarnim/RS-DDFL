@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
-from ..utils.constants import LOSS_FN_POINTWISE
+from ..utils.constants import LOSS_FN_TYPE_POINTWISE
 from ..loss_fn import pointwise
 
 
@@ -12,7 +12,7 @@ class PointwiseTrainer:
     def __init__(
         self,
         model: nn.Module,
-        task_fn_type: LOSS_FN_POINTWISE="bce",
+        task_fn_type: LOSS_FN_TYPE_POINTWISE="bce",
         lr: float=1e-4, 
         lambda_: float=1e-3, 
     ):

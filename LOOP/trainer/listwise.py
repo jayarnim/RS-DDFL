@@ -4,15 +4,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
-from ..utils.constants import LOSS_FN_LISTWISE
+from ..utils.constants import LOSS_FN_TYPE_LISTWISE
 from ..loss_fn import listwise
 
 
-class ListwiseTrainer:
+class PairwiseTrainer:
     def __init__(
         self,
         model: nn.Module,
-        task_fn_type: LOSS_FN_LISTWISE="climf",
+        task_fn_type: LOSS_FN_TYPE_LISTWISE="climf",
         lr: float=1e-4, 
         lambda_: float=1e-3, 
     ):
