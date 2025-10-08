@@ -62,14 +62,18 @@ class Module(nn.Module):
         return pred
 
     def score(self, user_idx, item_idx):
+        # modules
         pred_vector_matching = self.MaFL.ml(user_idx, item_idx)
         pred_vector_metric = self.MeFL.ml(user_idx, item_idx)
 
+        # agg
         kwargs = dict(
             tensors=(pred_vector_matching, pred_vector_metric), 
             dim=-1,
         )
         pred_vector = torch.cat(**kwargs)
+
+        # predict
         logit = self.logit_layer(pred_vector).squeeze(-1)
 
         return logit
