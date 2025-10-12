@@ -19,16 +19,34 @@ class TRN_VAL_TST:
         self, 
         n_users: int, 
         n_items: int,
+        learning_type: LEARNING_TYPE="pointwise",
         col_user: str=DEFAULT_USER_COL, 
         col_item: str=DEFAULT_ITEM_COL,
-        learning_type: LEARNING_TYPE="pointwise",
     ):
+        """
+        Dataset splitter and loader builder for training, validation, testing, and
+        leave-one-out (LOO) evaluation in latent factor model experiments
+        ------------
+        created by @jayarnim
+
+        args:
+            n_users (int):
+                Total number of users in the dataset.
+            n_items (int):
+                Total number of items in the dataset.
+            learning_type (str):
+                Learning paradigm used for training data construction.
+                Determines the type of `CustomizedDataLoader` to be instantiated.
+                `pointwise`, `pairwise`, `listwise` optional.
+        """
+        # global attr
         self.n_users = n_users
         self.n_items = n_items
         self.col_user = col_user
         self.col_item = col_item
         self.learning_type = learning_type
 
+        # set up components, dataloader, etc.
         self._set_up_components()
 
     def get(
@@ -42,6 +60,39 @@ class TRN_VAL_TST:
         shuffle: bool=True,
         seed: int=SEED,
     ):
+        """
+        Splits the input DataFrame into train / validation / test / LOO subsets,
+        constructs corresponding DataLoaders,
+        and generates historical context information for users and items.
+
+        Args:
+            origin (pd.DataFrame):
+                The full implicit-feedback dataset containing user-item interactions.  
+                Must include columns corresponding to `col_user`, `col_item`, and (optionally) `col_rating` if available.
+            trn_val_tst_ratio (dict): `{"trn": float, "val": float, "tst": float}`
+                Dictionary specifying the data split ratios for train, validation, and test sets.  
+            neg_per_pos_ratio (dict): `{"trn": int, "val": int, "tst": int, "loo": int}`
+                Dictionary specifying the number of negative samples per positive instance for each split.  
+            batch_size (dict): `{trn: int, val: int, tst: int, loo: int}`
+                Batch sizes for each split.  
+            hist_selector_type (str):
+                Strategy for selecting user/item interaction histories.  
+                - `default`: use all past interactions.  
+                - `tfidf`: select a subset of informative interactions via TF-IDF weighting.
+            max_hist (int):
+                Maximum number of historical interactions to retain per user/item.  
+                If `None`, all available history is used.
+
+        Returns:
+            loaders (dict): `{"trn": dataloader, "val": dataloader, "tst": dataloader, "loo": dataloader}`
+                A dictionary containing the constructed DataLoaders.
+            user_item_matrix (torch.Tensor): 
+                User-item interaction matrix derived from the full dataset.
+                (shape: [U+1,I+1])
+            hist (dict): `{"user": torch.Tensor, "item": torch.Tensor}`
+                Aggregated user and item interaction histories.
+                The selection strategy is controlled by `hist_selector_type`.
+        """
         kwargs = dict(
             trn_val_tst_ratio=trn_val_tst_ratio,
             neg_per_pos_ratio=neg_per_pos_ratio,
@@ -55,50 +106,67 @@ class TRN_VAL_TST:
             trn_val_tst_ratio=trn_val_tst_ratio,
             seed=seed,
         )
-        split_dict = self._data_splitter(**kwargs)
+        splits = self._data_splitter(**kwargs)
 
         # generate data loaders
-        loaders = []
-
-        for split_type in ["trn", "val", "tst", "loo"]:
-            kwargs = dict(
-                origin=origin,
-                split=split_dict[split_type], 
-                neg_per_pos_ratio=neg_per_pos_ratio[split_type], 
-                batch_size=batch_size[split_type], 
-                shuffle=shuffle,
-            )
-            
-            if split_type=="trn":
-                loader = self.dataloader_lrn.get(**kwargs)
-            elif split_type=="val":
-                loader = self.dataloader_lrn.get(**kwargs)
-            elif split_type=="tst":
-                loader = self.dataloader_eval.get(**kwargs)
-            elif split_type=="loo":
-                loader = self.dataloader_eval.get(**kwargs)
-
-            loaders.append(loader)
+        kwargs = dict(
+            origin=origin,
+            splits=splits, 
+            neg_per_pos_ratio=neg_per_pos_ratio, 
+            batch_size=batch_size, 
+            shuffle=shuffle,
+        )
+        loaders = self._dataloader_generator(**kwargs)
 
         # generate user-item interaction matrix
-        user_item_matrix = self._user_item_matrix_generator(split_dict["trn"])
+        kwargs = dict(
+            data=splits["trn"],
+        )
+        user_item_matrix = self._user_item_matrix_generator(**kwargs)
 
         # generate histories
+        hist = {}
+
         kwargs = dict(
             interactions=user_item_matrix,
             hist_selector_type=hist_selector_type,
             max_hist=max_hist,
         )
-        user_hist = self._histories_generator(**kwargs)
+        hist["user"] = self._histories_generator(**kwargs)
 
         kwargs = dict(
             interactions=user_item_matrix.T,
             hist_selector_type=hist_selector_type,
             max_hist=max_hist,
         )
-        item_hist = self._histories_generator(**kwargs)
+        hist["item"] = self._histories_generator(**kwargs)
 
-        return loaders, user_item_matrix, (user_hist, item_hist)
+        return loaders, user_item_matrix, hist
+
+    def _dataloader_generator(self, origin, splits, neg_per_pos_ratio, batch_size, shuffle):
+        loaders = {}
+
+        for split_type in ["trn", "val", "tst", "loo"]:
+            kwargs = dict(
+                origin=origin,
+                split=splits[split_type], 
+                neg_per_pos_ratio=neg_per_pos_ratio[split_type], 
+                batch_size=batch_size[split_type], 
+                shuffle=shuffle,
+            )
+            
+            if split_type=="trn":
+                loader = self.dataloader_lrn(**kwargs)
+            elif split_type=="val":
+                loader = self.dataloader_lrn(**kwargs)
+            elif split_type=="tst":
+                loader = self.dataloader_eval(**kwargs)
+            elif split_type=="loo":
+                loader = self.dataloader_eval(**kwargs)
+
+            loaders[split_type] = loader
+        
+        return loaders
 
     def _user_item_matrix_generator(self, data):
         kwargs = dict(
@@ -123,12 +191,7 @@ class TRN_VAL_TST:
 
         return user_item_matrix
 
-    def _histories_generator(
-        self, 
-        interactions: torch.Tensor, 
-        hist_selector_type: HIST_SELECTOR_TYPE='default',
-        max_hist: Optional[int]=None,
-    ):
+    def _histories_generator(self, interactions, hist_selector_type, max_hist):
         # drop padding idx
         interactions_unpadded = interactions[:-1, :-1]
 
@@ -153,12 +216,7 @@ class TRN_VAL_TST:
 
         return hist_indices_padded
 
-    def _hist_selector(
-        self,
-        interactions: torch.Tensor,
-        hist_selector_type: HIST_SELECTOR_TYPE='default',
-        max_hist: Optional[int]=None,
-    ):
+    def _hist_selector(self, interactions, hist_selector_type, max_hist):
         kwargs = dict(
             interactions=interactions,
             max_hist=max_hist,
@@ -171,12 +229,7 @@ class TRN_VAL_TST:
         else:
             raise ValueError(f"Invalid hist_selector_type: {hist_selector_type}")
 
-    def _data_splitter(
-        self,
-        origin: pd.DataFrame,
-        trn_val_tst_ratio: dict,
-        seed: int,
-    ):
+    def _data_splitter(self, origin, trn_val_tst_ratio, seed):
         split_type = list(trn_val_tst_ratio.keys())
         split_ratio = list(trn_val_tst_ratio.values())
 

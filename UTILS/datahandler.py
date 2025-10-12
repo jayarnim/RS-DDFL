@@ -68,26 +68,6 @@ def description(
     )
 
 
-def valid_users(
-    data: pd.DataFrame, 
-    col_user: str=DEFAULT_USER_COL, 
-    min_interaction: int=5,
-):
-    user_counts = data[col_user].value_counts()
-    valid_users = user_counts[user_counts >= min_interaction].index
-    return valid_users
-
-
-def valid_items(
-    data: pd.DataFrame, 
-    col_item: str=DEFAULT_ITEM_COL, 
-    min_interaction: int=5,
-):
-    item_counts = data[col_item].value_counts()
-    valid_items = item_counts[item_counts >= min_interaction].index
-    return valid_items
-
-
 def label_encoding(
     data: pd.DataFrame, 
     col_user: str=DEFAULT_USER_COL, 

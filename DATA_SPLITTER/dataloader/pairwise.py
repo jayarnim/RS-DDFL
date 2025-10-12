@@ -34,12 +34,21 @@ class CustomizedDataset(Dataset):
         return user, pos, neg
 
     def _set_up_components(self):
+        self._init_entities()
+        self._init_candidates()
+
+    def _init_entities(self):
         self.user_list = sorted(self.origin[self.col_user].unique())
         self.item_list = sorted(self.origin[self.col_item].unique())
 
         self.n_users = len(self.user_list)
         self.n_items = len(self.item_list)
 
+        zip_obj = zip(self.split[self.col_user], self.split[self.col_item])
+        self.user_item_pairs = list(zip_obj)
+        self.total_samples = len(self.user_item_pairs) * self.neg_per_pos_ratio
+
+    def _init_candidates(self):
         self.pos_per_user = {
             user: set(self.origin.loc[self.origin[self.col_user]==user, self.col_item].tolist())
             for user in self.user_list
@@ -49,10 +58,6 @@ class CustomizedDataset(Dataset):
             user: list(set(self.item_list) - self.pos_per_user[user])
             for user in self.user_list
         }
-
-        zip_obj = zip(self.split[self.col_user], self.split[self.col_item])
-        self.user_item_pairs = list(zip_obj)
-        self.total_samples = len(self.user_item_pairs) * self.neg_per_pos_ratio
 
 
 class CustomizedDataLoader:
@@ -64,7 +69,7 @@ class CustomizedDataLoader:
         self.col_user = col_user
         self.col_item = col_item
 
-    def get(
+    def __call__(
         self, 
         origin: pd.DataFrame,
         split: pd.DataFrame,

@@ -14,7 +14,7 @@ from ..msr.python_evaluation import (
     ndcg_at_k, 
 )
 
-class PerformanceEvaluator:
+class MetricsComputer:
     def __init__(
         self, 
         col_user: str=DEFAULT_USER_COL,
@@ -27,13 +27,12 @@ class PerformanceEvaluator:
         self.col_rating = col_rating
         self.col_prediction = col_prediction
 
-    def evaluate(
+    def __call__(
         self,
-        result: pd.DataFrame,
+        rating_true: pd.DataFrame,
+        rating_pred: pd.DataFrame,
         top_k_list: list=[5, 10, 15, 20, 25, 50, 100],
     ):
-        rating_true, rating_pred = self._true_pred_seperator(result)
-
         eval_list = []
 
         for TOP_K in top_k_list:
@@ -72,21 +71,3 @@ class PerformanceEvaluator:
             map=map_k, 
             ndcg=ndcg_k,
         )
-
-    def _true_pred_seperator(self, result):
-        TRUE_COL_LIST = [self.col_user, self.col_item, self.col_rating]
-        PRED_COL_LIST = [self.col_user, self.col_item, self.col_prediction]
-
-        rating_true = (
-            result[TRUE_COL_LIST]
-            [result[self.col_rating]==1]
-            .sort_values(by=self.col_user, ascending=True)
-        )
-
-        rating_pred = (
-            result[PRED_COL_LIST]
-            .sort_values(by=[self.col_user, self.col_prediction], ascending=[True, False], kind='stable')
-            .groupby(self.col_user)
-        )
-
-        return rating_true, rating_pred

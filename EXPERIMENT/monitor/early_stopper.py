@@ -2,20 +2,20 @@ class EarlyStopper:
     def __init__(
         self,
         patience: int,
-        min_delta: float,
+        delta: float,
     ):
         self.patience = patience
-        self.min_delta = min_delta
+        self.delta = delta
 
         self._set_up_components()
 
-    def check(
+    def __call__(
         self,
         current_score,
         current_epoch,
         current_model_state,
     ):
-        if current_score > self._best_score + self.min_delta:
+        if current_score > self._best_score + self.delta:
             self._best_score = current_score
             self._best_epoch = current_epoch + 1
             self._best_model_state = current_model_state

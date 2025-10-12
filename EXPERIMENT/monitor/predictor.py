@@ -7,6 +7,7 @@ from ..utils.constants import (
     DEFAULT_LABEL_COL,
     DEFAULT_PREDICTION_COL,
 )
+from DATA_SPLITTER.dataloader.pointwise import CustomizedDataLoader
 
 
 class EarlyStoppingPredictor:
@@ -18,7 +19,6 @@ class EarlyStoppingPredictor:
         col_label: str=DEFAULT_LABEL_COL,
         col_prediction: str=DEFAULT_PREDICTION_COL,
     ):
-        # device setting
         DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(DEVICE)
 
@@ -28,9 +28,12 @@ class EarlyStoppingPredictor:
         self.col_label= col_label
         self.col_prediction = col_prediction
 
-    def predict(
+    @torch.no_grad()
+    def __call__(
         self,
-        dataloader: torch.utils.data.dataloader.DataLoader,
+        loo_loader: CustomizedDataLoader,
+        epoch: int,
+        n_epochs: int,
     ):
         # evaluation
         self.model.eval()
@@ -42,8 +45,8 @@ class EarlyStoppingPredictor:
         pred_list = []
 
         iter_obj = tqdm(
-            iterable=dataloader, 
-            desc=f"LEAVE ONE OUT",
+            iterable=loo_loader, 
+            desc=f"Epoch {epoch+1}/{n_epochs} LOO",
         )
 
         for user_idx, item_idx, label in iter_obj:

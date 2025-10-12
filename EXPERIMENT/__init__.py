@@ -1,8 +1,7 @@
 from . import (
-    loop,
+    runner,
     trainer,
     monitor,
-    predictor,
     evaluator,
     loss_fn,
     msr,

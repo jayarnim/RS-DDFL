@@ -1,19 +1,27 @@
 import torch
+import torch.nn as nn
 
 
-def save(model, path):
+def save(
+    model: nn.Module, 
+    path: str,
+):
     if not hasattr(model, "init_args"):
         raise AttributeError("Model must have `init_args` attribute for checkpointing.")
     
     checkpoint = {
         "model_state_dict": model.state_dict(),
-        "model_args": model.init_args
+        "model_args": model.init_args,
     }
 
     torch.save(checkpoint, path)
 
 
-def load(ModelClass, path, map_location=None):
+def load(
+    ModelClass: nn.Module, 
+    path: str, 
+    map_location=None,
+):
     checkpoint = torch.load(path, map_location=map_location, weights_only=False)
     model_args = checkpoint["model_args"]
     model = ModelClass(**model_args)

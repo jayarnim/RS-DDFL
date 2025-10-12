@@ -19,28 +19,46 @@ from ..msr.python_evaluation import (
 )
 from .early_stopper import EarlyStopper
 from .predictor import EarlyStoppingPredictor
+from DATA_SPLITTER.dataloader.pointwise import CustomizedDataLoader
 
 
 class EarlyStoppingMonitor:
     def __init__(
         self,
         model: nn.Module,
-        metric_fn_type: METRIC_FN_TYPE,
         patience: int,
-        min_delta: float,
+        delta: float,
+        metric_fn_type: METRIC_FN_TYPE="ndcg",
         col_user: str=DEFAULT_USER_COL,
         col_item: str=DEFAULT_ITEM_COL,
         col_label: str=DEFAULT_LABEL_COL,
         col_prediction: str=DEFAULT_PREDICTION_COL,
         top_k: int=DEFAULT_K,
     ):
+        """
+        Early Stopping Monitor for Latent Factor Model based on Metrics, not Loss
+        -----
+        created by @jayarnim
+
+        Args:
+            model (nn.Module):
+                latent factor model instance.
+            patience (int):
+                number of epochs to wait for improvement before stopping training early.
+            delta (float):
+                minimum change in the monitored metric to qualify as an improvement.
+            metric_fn_type (str):
+                metric functions currently supported are: `hr`, `precision`, `recall`, `map`, `ndcg`. 
+        """
+        # device setting
         DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(DEVICE)
 
+        # global attr
         self.model = model.to(self.device)
         self.metric_fn_type = metric_fn_type
         self.patience = patience
-        self.min_delta = min_delta
+        self.delta = delta
         self.col_user = col_user
         self.col_item = col_item
         self.col_label= col_label
@@ -49,12 +67,18 @@ class EarlyStoppingMonitor:
 
         self._set_up_components()
 
-    def monitor(
+    def __call__(
         self,
-        dataloader: torch.utils.data.dataloader.DataLoader,
+        loo_loader: CustomizedDataLoader,
         epoch: int,
+        n_epochs: int,
     ):
-        result = self.predictor.predict(dataloader)
+        kwargs = dict(
+            loo_loader=loo_loader,
+            epoch=epoch,
+            n_epochs=n_epochs,
+        )
+        result = self.predictor(**kwargs)
 
         rating_true, rating_pred = self._true_pred_seperator(result)
 
@@ -67,18 +91,16 @@ class EarlyStoppingMonitor:
             col_prediction=self.col_prediction,
             k=self.top_k,
         )
-        self._current_score = self.metric_fn(**kwargs)
+        score = self.metric_fn(**kwargs)
 
         kwargs = dict(
-            current_score=self._current_score, 
+            current_score=score, 
             current_epoch=epoch,
             current_model_state=copy.deepcopy(self.model.state_dict()),
         )
-        self.stopper.check(**kwargs)
+        self.stopper(**kwargs)
 
-    @property
-    def get_current_score(self):
-        return self._current_score
+        return score
 
     @property
     def get_should_stop(self):
@@ -119,7 +141,6 @@ class EarlyStoppingMonitor:
         return rating_true, rating_pred
 
     def _set_up_components(self):
-        self._current_score = None
         self._init_metric_fn()
         self._init_predictor()
         self._init_stopper()
@@ -151,6 +172,6 @@ class EarlyStoppingMonitor:
     def _init_stopper(self):        
         kwargs = dict(
             patience=self.patience,
-            min_delta=self.min_delta,
+            delta=self.delta,
         )
         self.stopper = EarlyStopper(**kwargs)

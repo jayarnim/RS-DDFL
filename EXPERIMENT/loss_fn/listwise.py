@@ -1,7 +1,11 @@
+import torch
 import torch.nn.functional as F
 
 
-def climf(pos, neg):
+def climf(
+    pos: torch.Tensor, 
+    neg: torch.Tensor,
+):
     diff = neg - pos.unsqueeze(1)
     max_pos_term  = F.logsigmoid(pos)
     min_diff_term = F.logsigmoid(-diff).sum(dim=1)

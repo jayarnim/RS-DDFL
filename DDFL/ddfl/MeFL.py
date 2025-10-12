@@ -9,12 +9,38 @@ class Module(nn.Module):
         n_users: int,
         n_items: int,
         n_factors: int,
-        alpha: float,
         hidden: list,
         dropout: float,
+        alpha: float,
         interactions: torch.Tensor, 
     ):
-        super(Module, self).__init__()
+        """
+        DDFL: a deep dual function learning-based model for recommender systems (Shah et al., 2020)
+        -----
+        Implements the base structure of Metric Function Learning (MeFL),
+        MLP & distance embedding based latent factor model,
+        sub-module of Deep Dual Function Learning-based Model (DDFL)
+        to learn user-item distance.
+
+        Args:
+            n_users (int): 
+                total number of users in the dataset, U.
+            n_items (int): 
+                total number of items in the dataset, I.
+            n_factors (int): 
+                dimensionality of user and item latent representation vectors, K.
+            hidden (list): 
+                layer dimensions for the distance function. 
+                (e.g., [64, 32, 16, 8])
+            dropout (float): 
+                dropout rate applied to MLP layers for regularization.
+            alpha (float): 
+                distance factor.
+            interaction (torch.Tensor): 
+                user-item interaction matrix, masked evaluation datasets. 
+                (shape: [U+1, I+1])
+        """
+        super().__init__()
 
         # attr dictionary for load
         self.init_args = locals().copy()
@@ -45,45 +71,53 @@ class Module(nn.Module):
         item_idx: torch.Tensor,
     ):
         """
-        user_idx: (B,)
-        item_idx: (B,)
+        Training Method
+
+        Args:
+            user_idx (torch.Tensor): target user idx (shape: [B,])
+            item_idx (torch.Tensor): target item idx (shape: [B,])
+        
+        Returns:
+            logit (torch.Tensor): (u,i) pair interaction logit (shape: [B,])
         """
         return self.score(user_idx, item_idx)
 
+    @torch.no_grad()
     def predict(
         self, 
         user_idx: torch.Tensor, 
         item_idx: torch.Tensor,
     ):
         """
-        user_idx: (B,)
-        item_idx: (B,)
+        Evaluation Method
+
+        Args:
+            user_idx (torch.Tensor): target user idx (shape: [B,])
+            item_idx (torch.Tensor): target item idx (shape: [B,])
+
+        Returns:
+            prob (torch.Tensor): (u,i) pair interaction probability (shape: [B,])
         """
-        with torch.no_grad():
-            logit = self.score(user_idx, item_idx)
-            pred = torch.sigmoid(logit)
-        return pred
+        logit = self.score(user_idx, item_idx)
+        prob = torch.sigmoid(logit)
+        return prob
 
     def score(
         self, 
         user_idx: torch.Tensor, 
         item_idx: torch.Tensor,
     ):
-        pred_vector = self.ml(user_idx, item_idx)
-        logit = self.logit_layer(pred_vector).squeeze(-1)
+        pred_vector = self.ncf(user_idx, item_idx)
+        logit = self.pred_layer(pred_vector).squeeze(-1)
         return logit
 
-    def ml(
-        self, 
-        user_idx: torch.Tensor, 
-        item_idx: torch.Tensor,
-    ):
+    def ncf(self, user_idx, item_idx):
         user_embed_slice = self.user_hist_embed_generator(user_idx, item_idx)
         item_embed_slice = self.item_hist_embed_generator(user_idx, item_idx)
 
         agg_slice = (user_embed_slice - item_embed_slice) ** 2
 
-        dist_slice = self.mlp_layers(agg_slice)
+        dist_slice = self.dist_fn(agg_slice)
         pred_vector = 1 - (dist_slice / self.alpha)
 
         return pred_vector
@@ -139,13 +173,13 @@ class Module(nn.Module):
         self.proj_i = nn.Linear(**kwargs)
 
         components = list(self._yield_layers(self.hidden))
-        self.mlp_layers = nn.Sequential(*components)
+        self.dist_fn = nn.Sequential(*components)
 
         kwargs = dict(
             in_features=self.hidden[-1],
             out_features=1,
         )
-        self.logit_layer = nn.Linear(**kwargs)
+        self.pred_layer = nn.Linear(**kwargs)
 
     def _yield_layers(self, hidden):
         idx = 1

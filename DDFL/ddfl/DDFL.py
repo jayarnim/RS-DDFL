@@ -9,12 +9,38 @@ class Module(nn.Module):
         n_users: int,
         n_items: int,
         n_factors: int,
-        alpha: int,
         hidden: list,
         dropout: float,
+        alpha: float,
         interactions: torch.Tensor, 
     ):
-        super(Module, self).__init__()
+        """
+        DDFL: a deep dual function learning-based model for recommender systems (Shah et al., 2020)
+        -----
+        Implements the base structure of Deep Dual Function Learning-based Model (DDFL),
+        MLP & history, distance embedding based latent factor model,
+        combining a Metric Function Learning (MeFL) and a Matching Function Learning (MaFL)
+        to learn user-item distance & user-item interactions.
+
+        Args:
+            n_users (int): 
+                total number of users in the dataset, U.
+            n_items (int): 
+                total number of items in the dataset, I.
+            n_factors (int): 
+                dimensionality of user and item latent representation vectors, K.
+            hidden (list): 
+                layer dimensions for the distance & matching function. 
+                (e.g., [64, 32, 16, 8])
+            dropout (float): 
+                dropout rate applied to MLP layers for regularization.
+            alpha (float): 
+                distance factor.
+            interaction (torch.Tensor): 
+                user-item interaction matrix, masked evaluation datasets. 
+                (shape: [U+1, I+1])
+        """
+        super().__init__()
 
         # attr dictionary for load
         self.init_args = locals().copy()
@@ -34,7 +60,7 @@ class Module(nn.Module):
         )
 
         # generate layers
-        self._init_layers()
+        self._set_up_components()
 
     def forward(
         self, 
@@ -42,29 +68,46 @@ class Module(nn.Module):
         item_idx: torch.Tensor,
     ):
         """
-        user_idx: (B,)
-        item_idx: (B,)
+        Training Method
+
+        Args:
+            user_idx (torch.Tensor): target user idx (shape: [B,])
+            item_idx (torch.Tensor): target item idx (shape: [B,])
+        
+        Returns:
+            logit (torch.Tensor): (u,i) pair interaction logit (shape: [B,])
         """
         return self.score(user_idx, item_idx)
 
+    @torch.no_grad()
     def predict(
         self, 
         user_idx: torch.Tensor, 
         item_idx: torch.Tensor,
     ):
         """
-        user_idx: (B,)
-        item_idx: (B,)
+        Evaluation Method
+
+        Args:
+            user_idx (torch.Tensor): target user idx (shape: [B,])
+            item_idx (torch.Tensor): target item idx (shape: [B,])
+
+        Returns:
+            prob (torch.Tensor): (u,i) pair interaction probability (shape: [B,])
         """
-        with torch.no_grad():
-            logit = self.score(user_idx, item_idx)
-            pred = torch.sigmoid(logit)
-        return pred
+        logit = self.score(user_idx, item_idx)
+        prob = torch.sigmoid(logit)
+        return prob
 
     def score(self, user_idx, item_idx):
+        pred_vector = self.ensemble(user_idx, item_idx)
+        logit = self.pred_layer(pred_vector).squeeze(-1)
+        return logit
+
+    def ensemble(self, user_idx, item_idx):
         # modules
-        pred_vector_matching = self.MaFL.ml(user_idx, item_idx)
-        pred_vector_metric = self.MeFL.ml(user_idx, item_idx)
+        pred_vector_matching = self.MaFL.ncf(user_idx, item_idx)
+        pred_vector_metric = self.MeFL.ncf(user_idx, item_idx)
 
         # agg
         kwargs = dict(
@@ -73,10 +116,7 @@ class Module(nn.Module):
         )
         pred_vector = torch.cat(**kwargs)
 
-        # predict
-        logit = self.logit_layer(pred_vector).squeeze(-1)
-
-        return logit
+        return pred_vector
 
     def _set_up_components(self):
         self._create_modules()
@@ -109,4 +149,4 @@ class Module(nn.Module):
             in_features=self.hidden[-1]*2,
             out_features=1,
         )
-        self.logit_layer = nn.Linear(**kwargs)
+        self.pred_layer = nn.Linear(**kwargs)
