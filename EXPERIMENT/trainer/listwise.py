@@ -64,9 +64,9 @@ class CustomizedTrainer:
             epoch=epoch,
             n_epochs=n_epochs,
         )
-        val_task_loss = self._epoch_val_step(**kwargs)
+        val_loss = self._epoch_val_step(**kwargs)
 
-        return trn_loss, val_task_loss, computing_cost
+        return trn_loss, val_loss, computing_cost
 
     def _epoch_trn_step(
         self,
@@ -151,7 +151,7 @@ class CustomizedTrainer:
         neg_logit_flat = self.model(user_idx_exp.reshape(-1), neg_idx.reshape(-1))
         neg_logit = neg_logit_flat.view(*neg_idx.shape)
         
-        loss = self.task_fn(pos_logit, neg_logit)
+        loss = self.loss_fn(pos_logit, neg_logit)
         
         return loss
 
@@ -162,13 +162,13 @@ class CustomizedTrainer:
         self.scaler.update()
 
     def _set_up_components(self):
-        self._init_task_fn()
+        self._init_loss_fn()
         self._init_optimizer()
         self._init_scaler()
 
-    def _init_task_fn(self):
+    def _init_loss_fn(self):
         if self.loss_fn_type=="climf":
-            self.task_fn = listwise.climf
+            self.loss_fn = listwise.climf
         else:
             raise ValueError(f"Invalid loss_fn_type: {self.loss_fn_type}")
 
