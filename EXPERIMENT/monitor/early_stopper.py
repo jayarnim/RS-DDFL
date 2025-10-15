@@ -27,8 +27,20 @@ class EarlyStopper:
             self._stop = True
 
     @property
-    def get_should_stop(self):
+    def should_stop(self):
         return self._stop
+
+    @should_stop.setter
+    def should_stop(self, value):
+        self._stop = bool(value)
+
+    @property
+    def get_counter(self):
+        return self._counter
+    
+    @get_counter.setter
+    def set_counter(self, value):
+        self._counter = value
 
     @property
     def get_best_epoch(self):

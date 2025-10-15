@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.amp import GradScaler, autocast
 from ..utils.constants import LOSS_FN_TYPE_PAIRWISE
 from ..loss_fn import pairwise
-from DATA_SPLITTER.dataloader.pairwise import CustomizedDataLoader
+from PIPELINE.dataloader.pairwise import CustomizedDataLoader
 
 
 class CustomizedTrainer:

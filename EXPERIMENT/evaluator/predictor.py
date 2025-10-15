@@ -11,7 +11,7 @@ from ..utils.constants import (
     DEFAULT_RATING_COL,
     DEFAULT_PREDICTION_COL,
 )
-from DATA_SPLITTER.dataloader.pointwise import CustomizedDataLoader
+from PIPELINE.dataloader.pointwise import CustomizedDataLoader
 
 
 class PerformancePredictor:

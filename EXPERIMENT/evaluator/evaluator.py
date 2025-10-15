@@ -10,7 +10,7 @@ from ..utils.constants import (
 )
 from .predictor import PerformancePredictor
 from .metrics import MetricsComputer
-from DATA_SPLITTER.dataloader.pointwise import CustomizedDataLoader
+from PIPELINE.dataloader.pointwise import CustomizedDataLoader
 
 
 class PerformanceEvaluator:

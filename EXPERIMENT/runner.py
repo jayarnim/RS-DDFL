@@ -2,9 +2,9 @@ from IPython.display import clear_output
 from statistics import mean
 import torch
 import torch.nn as nn
-from DATA_SPLITTER.dataloader.pointwise import CustomizedDataLoader as PointwiseDataLoader
-from DATA_SPLITTER.dataloader.pairwise import CustomizedDataLoader as PairwiseDataLoader
-from DATA_SPLITTER.dataloader.listwise import CustomizedDataLoader as ListwiseDataLoader
+from PIPELINE.dataloader.pointwise import CustomizedDataLoader as PointwiseDataLoader
+from PIPELINE.dataloader.pairwise import CustomizedDataLoader as PairwiseDataLoader
+from PIPELINE.dataloader.listwise import CustomizedDataLoader as ListwiseDataLoader
 from .trainer.pointwise import CustomizedTrainer as PointwiseTrainer
 from .trainer.pairwise import CustomizedTrainer as PairwiseTrainer
 from .trainer.listwise import CustomizedTrainer as ListwiseTrainer
@@ -106,7 +106,7 @@ class Runner:
             computing_cost_list.extend(computing_cost)
 
             # early stopping
-            if self.monitor.get_should_stop:
+            if self.monitor.should_stop==True:
                 break
 
             # log reset
@@ -143,13 +143,16 @@ class Runner:
         return trn_loss, val_loss, computing_cost
 
     def _run_monitor(self, loo_loader, epoch, n_epochs, warm_up, interval):
-        if ((epoch+1) > warm_up) and ((epoch+1) % interval == 0):
+        if (epoch+1) % interval==0:
             kwargs = dict(
                 loo_loader=loo_loader, 
                 epoch=epoch,
                 n_epochs=n_epochs,
             )
             loo_score = self.monitor(**kwargs)
+
+            if (epoch+1) <= warm_up:
+                self.monitor.set_counter = 0
 
             print(
                 f"CURRENT SCORE: {loo_score:.4f}",

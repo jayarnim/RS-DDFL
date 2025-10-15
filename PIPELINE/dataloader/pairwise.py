@@ -63,22 +63,23 @@ class CustomizedDataset(Dataset):
 class CustomizedDataLoader:
     def __init__(
         self,
+        origin: pd.DataFrame,
         col_user: str=DEFAULT_USER_COL,
         col_item: str=DEFAULT_ITEM_COL,
     ):
+        self.origin = origin
         self.col_user = col_user
         self.col_item = col_item
 
     def __call__(
         self, 
-        origin: pd.DataFrame,
         split: pd.DataFrame,
         neg_per_pos_ratio: int,
         batch_size: int,
         shuffle: bool=True,
     ):
         kwargs = dict(
-            origin=origin,
+            origin=self.origin,
             split=split, 
             neg_per_pos_ratio=neg_per_pos_ratio,
             col_user=self.col_user, 

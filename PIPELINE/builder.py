@@ -9,16 +9,15 @@ from .utils.constants import (
     SEED,
     HIST_SELECTOR_TYPE,
 )
-from .data_splitter.python_splitters import python_stratified_split
+from .msr.python_splitters import python_stratified_split
 from .dataloader import pointwise, pairwise, listwise
 from . import hist_selector
 
 
-class TRN_VAL_TST:
+class Builder:
     def __init__(
         self, 
-        n_users: int, 
-        n_items: int,
+        origin: pd.DataFrame,
         learning_type: LEARNING_TYPE="pointwise",
         col_user: str=DEFAULT_USER_COL, 
         col_item: str=DEFAULT_ITEM_COL,
@@ -30,18 +29,16 @@ class TRN_VAL_TST:
         created by @jayarnim
 
         args:
-            n_users (int):
-                Total number of users in the dataset.
-            n_items (int):
-                Total number of items in the dataset.
+            origin (pd.DataFrame):
+                The full implicit-feedback dataset containing user-item interactions.  
+                Must include columns corresponding to `col_user`, `col_item`, and (optionally) `col_rating` if available.
             learning_type (str):
                 Learning paradigm used for training data construction.
                 Determines the type of `CustomizedDataLoader` to be instantiated.
                 `pointwise`, `pairwise`, `listwise` optional.
         """
         # global attr
-        self.n_users = n_users
-        self.n_items = n_items
+        self.origin = origin
         self.col_user = col_user
         self.col_item = col_item
         self.learning_type = learning_type
@@ -49,9 +46,8 @@ class TRN_VAL_TST:
         # set up components, dataloader, etc.
         self._set_up_components()
 
-    def get(
+    def __call__(
         self, 
-        origin: pd.DataFrame,
         trn_val_tst_ratio: dict=dict(trn=0.8, val=0.1, tst=0.1),
         neg_per_pos_ratio: dict=dict(trn=4, val=4, tst=99, loo=99),
         batch_size: dict=dict(trn=256, val=256, tst=256, loo=1000),
@@ -61,14 +57,11 @@ class TRN_VAL_TST:
         seed: int=SEED,
     ):
         """
-        Splits the input DataFrame into train / validation / test / LOO subsets,
+        Splits the input DataFrame into TRN / VAL / TST / LOO subsets,
         constructs corresponding DataLoaders,
         and generates historical context information for users and items.
 
         Args:
-            origin (pd.DataFrame):
-                The full implicit-feedback dataset containing user-item interactions.  
-                Must include columns corresponding to `col_user`, `col_item`, and (optionally) `col_rating` if available.
             trn_val_tst_ratio (dict): `{"trn": float, "val": float, "tst": float}`
                 Dictionary specifying the data split ratios for train, validation, and test sets.  
             neg_per_pos_ratio (dict): `{"trn": int, "val": int, "tst": int, "loo": int}`
@@ -86,10 +79,10 @@ class TRN_VAL_TST:
         Returns:
             loaders (dict): `{"trn": dataloader, "val": dataloader, "tst": dataloader, "loo": dataloader}`
                 A dictionary containing the constructed DataLoaders.
-            user_item_matrix (torch.Tensor): 
+            interactions (torch.Tensor): 
                 User-item interaction matrix derived from the full dataset.
                 (shape: [U+1,I+1])
-            hist (dict): `{"user": torch.Tensor, "item": torch.Tensor}`
+            histories (dict): `{"user": torch.Tensor, "item": torch.Tensor}`
                 Aggregated user and item interaction histories.
                 The selection strategy is controlled by `hist_selector_type`.
         """
@@ -102,7 +95,6 @@ class TRN_VAL_TST:
 
         # split original data
         kwargs = dict(
-            origin=origin,
             trn_val_tst_ratio=trn_val_tst_ratio,
             seed=seed,
         )
@@ -110,7 +102,6 @@ class TRN_VAL_TST:
 
         # generate data loaders
         kwargs = dict(
-            origin=origin,
             splits=splits, 
             neg_per_pos_ratio=neg_per_pos_ratio, 
             batch_size=batch_size, 
@@ -122,33 +113,32 @@ class TRN_VAL_TST:
         kwargs = dict(
             data=splits["trn"],
         )
-        user_item_matrix = self._user_item_matrix_generator(**kwargs)
+        interactions = self._interactions_generator(**kwargs)
 
         # generate histories
-        hist = {}
+        histories = {}
 
         kwargs = dict(
-            interactions=user_item_matrix,
+            interactions=interactions,
             hist_selector_type=hist_selector_type,
             max_hist=max_hist,
         )
-        hist["user"] = self._histories_generator(**kwargs)
+        histories["user"] = self._histories_generator(**kwargs)
 
         kwargs = dict(
-            interactions=user_item_matrix.T,
+            interactions=interactions.T,
             hist_selector_type=hist_selector_type,
             max_hist=max_hist,
         )
-        hist["item"] = self._histories_generator(**kwargs)
+        histories["item"] = self._histories_generator(**kwargs)
 
-        return loaders, user_item_matrix, hist
+        return loaders, interactions, histories
 
-    def _dataloader_generator(self, origin, splits, neg_per_pos_ratio, batch_size, shuffle):
+    def _dataloader_generator(self, splits, neg_per_pos_ratio, batch_size, shuffle):
         loaders = {}
 
         for split_type in ["trn", "val", "tst", "loo"]:
             kwargs = dict(
-                origin=origin,
                 split=splits[split_type], 
                 neg_per_pos_ratio=neg_per_pos_ratio[split_type], 
                 batch_size=batch_size[split_type], 
@@ -168,7 +158,7 @@ class TRN_VAL_TST:
         
         return loaders
 
-    def _user_item_matrix_generator(self, data):
+    def _interactions_generator(self, data):
         kwargs = dict(
             size=(self.n_users + 1, self.n_items + 1),
             dtype=torch.int32,
@@ -229,13 +219,13 @@ class TRN_VAL_TST:
         else:
             raise ValueError(f"Invalid hist_selector_type: {hist_selector_type}")
 
-    def _data_splitter(self, origin, trn_val_tst_ratio, seed):
+    def _data_splitter(self, trn_val_tst_ratio, seed):
         split_type = list(trn_val_tst_ratio.keys())
         split_ratio = list(trn_val_tst_ratio.values())
 
         # for leave one out data set
         loo = (
-            origin
+            self.origin
             .groupby(self.col_user)
             .sample(n=1, random_state=seed)
             .sort_values(by=self.col_user)
@@ -244,7 +234,7 @@ class TRN_VAL_TST:
 
         # for trn, val, tst data set
         trn_val_tst = (
-            origin[~origin[[self.col_user, self.col_item]]
+            self.origin[~self.origin[[self.col_user, self.col_item]]
             .apply(tuple, axis=1)
             .isin(set(loo[[self.col_user, self.col_item]]
             .apply(tuple, axis=1)))]
@@ -280,11 +270,20 @@ class TRN_VAL_TST:
         assert CONDITION, ERROR_MESSAGE
 
     def _set_up_components(self):
+        self._init_entities()
         self._init_dataloader_lrn()
         self._init_dataloader_eval()
 
+    def _init_entities(self):
+        self.user_list = sorted(self.origin[self.col_user].unique())
+        self.item_list = sorted(self.origin[self.col_item].unique())
+
+        self.n_users = len(self.user_list)
+        self.n_items = len(self.item_list)
+
     def _init_dataloader_lrn(self):
         kwargs = dict(
+            origin=self.origin,
             col_user=self.col_user,
             col_item=self.col_item,
         )
@@ -299,6 +298,7 @@ class TRN_VAL_TST:
 
     def _init_dataloader_eval(self):
         kwargs = dict(
+            origin=self.origin,
             col_user=self.col_user,
             col_item=self.col_item,
         )
