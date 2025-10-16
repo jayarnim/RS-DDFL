@@ -1,4 +1,4 @@
-from UTILS.constants import(
+from ...UTILS.constants import(
     DEFAULT_USER_COL,
     DEFAULT_ITEM_COL,
     DEFAULT_RATING_COL,
@@ -11,8 +11,9 @@ from UTILS.constants import(
     SEED,
 )
 
-# Customized
 from typing import Literal
 
-LEARNING_TYPE = Literal["pointwise", "pairwise", "listwise"]
-HIST_SELECTOR_TYPE = Literal["default", "tfidf"]
+LOSS_FN_TYPE_POINTWISE = Literal["bce"]
+LOSS_FN_TYPE_PAIRWISE = Literal["bpr"]
+LOSS_FN_TYPE_LISTWISE = Literal["climf"]
+METRIC_FN_TYPE = Literal["hr", "precision", "recall", "map", "ndcg"]

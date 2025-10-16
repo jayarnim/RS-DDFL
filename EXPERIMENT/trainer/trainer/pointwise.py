@@ -4,21 +4,21 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler, autocast
-from ..utils.constants import LOSS_FN_TYPE_PAIRWISE
-from ..loss_fn import pairwise
-from PIPELINE.dataloader.pairwise import CustomizedDataLoader
+from ..utils.constants import LOSS_FN_TYPE_POINTWISE
+from ..loss_fn import pointwise
+from ...PIPELINE.dataloader.pointwise import CustomizedDataLoader
 
 
 class CustomizedTrainer:
     def __init__(
         self,
         model: nn.Module,
-        loss_fn_type: LOSS_FN_TYPE_PAIRWISE="bpr",
+        loss_fn_type: LOSS_FN_TYPE_POINTWISE="bce",
         lr: float=1e-4, 
         weight_decay: float=1e-3, 
     ):
         """
-        Pairwise Learning Single Epoch Trainer for Latent Factor Model
+        Pointwise Learning Single Epoch Trainer for Latent Factor Model
         -----
         created by @jayarnim
 
@@ -26,7 +26,7 @@ class CustomizedTrainer:
             model (nn.Module):
                 latent factor model instance.
             loss_fn_type (str):
-                parwise loss functions currently supported are: `bpr`.
+                pointwise loss functions currently supported are: `bce`.
             lr (float):
                 learning rate of optimizer `adam`.
             weight_decay (float):
@@ -41,7 +41,7 @@ class CustomizedTrainer:
         self.loss_fn_type = loss_fn_type
         self.lr = lr
         self.weight_decay = weight_decay
-        
+
         # set up components, loss function, optimizer, etc.
         self._set_up_components()
 
@@ -84,12 +84,12 @@ class CustomizedTrainer:
             desc=f"Epoch {epoch+1}/{n_epochs} TRN"
         )
 
-        for user_idx, pos_idx, neg_idx in iter_obj:
+        for user_idx, item_idx, label in iter_obj:
             # to gpu
             kwargs = dict(
                 user_idx=user_idx.to(self.device),
-                pos_idx=pos_idx.to(self.device), 
-                neg_idx=neg_idx.to(self.device),
+                item_idx=item_idx.to(self.device), 
+                label=label.to(self.device),
             )
 
             # set starting time for computing cost
@@ -112,11 +112,11 @@ class CustomizedTrainer:
         return epoch_loss / len(dataloader), epoch_computing_cost
 
     @torch.no_grad()
-    def _epoch_val_step(        
-        self,
-        dataloader: torch.utils.data.dataloader.DataLoader,
-        epoch: int,
-        n_epochs: int,
+    def _epoch_val_step(
+            self,
+            dataloader: torch.utils.data.dataloader.DataLoader,
+            epoch: int,
+            n_epochs: int,
     ):
         self.model.eval()
 
@@ -127,12 +127,12 @@ class CustomizedTrainer:
             desc=f"Epoch {epoch+1}/{n_epochs} VAL"
         )
 
-        for user_idx, pos_idx, neg_idx in iter_obj:
+        for user_idx, item_idx, label in iter_obj:
             # to gpu
             kwargs = dict(
                 user_idx=user_idx.to(self.device),
-                pos_idx=pos_idx.to(self.device), 
-                neg_idx=neg_idx.to(self.device),
+                item_idx=item_idx.to(self.device), 
+                label=label.to(self.device),
             )
 
             # forward pass
@@ -144,10 +144,9 @@ class CustomizedTrainer:
 
         return epoch_loss / len(dataloader)
 
-    def _batch_step(self, user_idx, pos_idx, neg_idx):
-        pos_logit = self.model(user_idx, pos_idx)
-        neg_logit = self.model(user_idx, neg_idx)
-        loss = self.loss_fn(pos_logit, neg_logit)
+    def _batch_step(self, user_idx, item_idx, label):
+        logit = self.model(user_idx, item_idx)
+        loss = self.loss_fn(logit, label)
         return loss
 
     def _run_fn_opt(self, loss):
@@ -162,8 +161,8 @@ class CustomizedTrainer:
         self._init_scaler()
 
     def _init_loss_fn(self):
-        if self.loss_fn_type=="bpr":
-            self.loss_fn = pairwise.bpr
+        if self.loss_fn_type=="bce":
+            self.loss_fn = pointwise.bce
         else:
             raise ValueError(f"Invalid loss_fn_type: {self.loss_fn_type}")
 

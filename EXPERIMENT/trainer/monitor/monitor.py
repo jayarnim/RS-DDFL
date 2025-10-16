@@ -19,7 +19,7 @@ from ..msr.python_evaluation import (
 )
 from .early_stopper import EarlyStopper
 from .predictor import EarlyStoppingPredictor
-from PIPELINE.dataloader.pointwise import CustomizedDataLoader
+from ...PIPELINE.dataloader.pointwise import CustomizedDataLoader
 
 
 class EarlyStoppingMonitor:
